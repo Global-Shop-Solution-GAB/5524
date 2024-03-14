@@ -1,0 +1,95 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Modified to work with the new SFDC
+'SS -5/19/22
+'Quote:13350-0
+'Ticket:CHA070-122820211312-0
+
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.iBIRunID.Declare
+	V.Local.iBILogID.Declare
+	V.local.iRet.Declare
+	V.Local.iRptID.Declare
+	V.Local.sParamNames.Declare
+	V.Local.sParamValues.Declare
+	V.Local.sMsg.Declare
+	v.Local.iRow.Declare
+	v.Local.sBDF.Declare
+	v.Local.fQty.Declare
+	v.Local.sSeq.Declare
+	v.Local.sJob.Declare
+	v.Local.sSuffix.Declare
+	v.Local.i.Declare
+	
+	'Validate Scra Number - If blank do not print report
+	F.Intrinsic.Control.If(V.Passed.000002,=,".000000")
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+	
+	
+	f.Intrinsic.UI.Msgbox("Print Quality Disposition Report?","Print",4,v.Local.iRet)
+	
+	f.Intrinsic.Control.If(v.Local.iRet,=,6)
+		'Get Report ID
+		F.Global.BI.GetIDFromName("GAB_5524_RejectRptFromGUI.rpt",V.Local.iRptID)
+		F.Intrinsic.Control.If(V.Local.iRptID,<,0)
+			F.Intrinsic.UI.Msgbox("GAB_5524_RejectRptFromGUI.rpt is not setup as a custom report.","Report not setup")
+			F.Intrinsic.Control.End
+		F.Intrinsic.Control.EndIf
+		
+		F.Global.BI.GetRunID(V.Local.iBIRunID)
+		F.Global.BI.StartLogging(V.Local.iBIRunID,V.Local.iRptID,0,"",V.Local.iBILogID)
+		
+	'	V.Local.sParamNames.Set("EMPL*!*JOB*!*SUF*!*SEQ*!*CHARGE_DATE")
+	'	F.Intrinsic.String.Build("{0}*!*{1}*!*{2}*!*{3}*!*{4}",V.Passed.009993,V.Passed.009990,V.Passed.009991,V.Passed.009992,V.Ambient.Date,V.Local.sParamValues)
+	'	F.Global.BI.RunReportPreProcessor(V.Local.iBIRunID,V.Local.iBILogID,V.Local.sParamNames,V.Local.sParamValues,"",-1,True,"",-1,"",-1,"","",V.Local.iRet,)
+			
+		V.Local.sParamNames.Set("EMPL*!*JOB*!*SUF*!*SEQ")
+		
+		F.Intrinsic.Control.If(V.Caller.Hook,=,50630)
+		'Check for new SFDC Post Process hook 50630
+			
+			'''''''''''''''''' we have to loop through a BDF now in the new SFDC'''''''''''''''''''''
+			
+			'Open BDF and cycle through job information for all selected jobs.
+			f.Intrinsic.BDF.Load("UpdateJobsView-gvWOOperations-bdf","UpdateJobsView-gvWOOperations-bdf")
+			f.Intrinsic.BDF.ReadRowCount("UpdateJobsView-gvWOOperations-bdf",v.Local.iRow)
+			f.Intrinsic.Math.Sub(v.Local.iRow,1,v.Local.iRow)
+			f.Intrinsic.Control.For(v.Local.i,0,v.Local.iRow,1)
+			    f.Intrinsic.BDF.ReadRow("UpdateJobsView-gvWOOperations-bdf",v.Local.i,v.Local.sBDF)
+			    f.Intrinsic.String.Split(v.Local.sBDF,"|~|",v.Local.sBDF)
+			    v.Local.sSeq.Set(v.Local.sBDF(1))
+			    'f.Intrinsic.Math.Add(v.Local.sBDF(3),v.Local.sBDF(4),v.Local.fQty)
+			    f.Intrinsic.String.Split(v.Local.sBDF(0),"-",v.Local.sBDF)
+			    v.Local.sJob.Set(v.Local.sBDF(0))
+			    v.Local.sSuffix.Set(v.Local.sBDF(1))
+			f.Intrinsic.Control.Next(v.Local.i)
+			'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+			F.Intrinsic.String.Build("{0}*!*{1}*!*{2}*!*{3}",V.Passed.Employee,v.Local.sJob,v.Local.sSuffix,v.Local.sSeq,v.Local.sParamValues)
+		F.Intrinsic.Control.Else
+		'Check for old SFDC Post Process hook 15890
+			'0009993 = employee number   009990 = JOB   009991 = Suffix   009992 = SEQ
+			F.Intrinsic.String.Build("{0}*!*{1}*!*{2}*!*{3}",V.Passed.009993,V.Passed.009990,V.Passed.009991,V.Passed.009992,v.Local.sParamValues)
+		F.Intrinsic.Control.EndIf
+		
+		F.Global.BI.RunReportPreProcessor(V.Local.iBIRunID,V.Local.iBILogID,V.Local.sParamNames,V.Local.sParamValues,"",-1,True,"",-1,"",-1,"","",V.Local.iRet)
+	'	F.Global.BI.RunReportPreProcessor(V.Local.iBIRunID,V.Local.iBILogID,"","","",-1,True,"",-1,"",-1,"","",V.Local.iRet)
+		
+		F.Global.BI.StopLogging(V.Local.iBILogID)
+	f.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Comments.Start
+${$5$}$2.0.0.0$}$2
+${$6$}$avaldez$}$20190509091156117$}$CBUu04veoT9NExad5Mkb3ylWEN0INN4ABljSL48Tf2ybP8DFNp+5OsLE46x0DfQ9T76oN/vT+Bw=
+Program.Sub.Comments.End
